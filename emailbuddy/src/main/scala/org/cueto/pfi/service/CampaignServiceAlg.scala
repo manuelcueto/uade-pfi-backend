@@ -52,9 +52,9 @@ object CampaignServiceAlg {
           userBaseId  <- campaignRepo.campaignBaseId(campaignId)
           templateIds <- campaignRepo.campaignTemplates(campaignId)
           templates   <- templateService.getTemplates(templateIds)
-          users       <- userBaseService.getUserSample(userBaseId, samplingRatio)
+          users       <- userBaseService.getUserSample(userBaseId, samplingRatio) //return the whole user instead
           _           <- emailService.sendEmails(users, templates)
-          _           <- eventService.samplingStarted(campaignId, users.size)
+//          _           <- eventService.samplingStarted(campaignId, users.size)
         } yield ()
     }
 }

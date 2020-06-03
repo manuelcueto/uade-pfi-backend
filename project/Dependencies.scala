@@ -52,7 +52,7 @@ object Dependencies {
      "com.github.daddykotex" %% "courier" % "2.0.0"
   )
 
-  lazy val domainDependencies = circe ++ cats ++ doobie
+  lazy val domainDependencies = circe ++ cats ++ doobie ++ test
   lazy val emailBuddyDependencies = circe ++ cats ++ doobie ++ logging ++ fs2 ++ test ++ http4s ++ email
   lazy val eventTrackerDependencies = circe ++ cats ++ logging ++ fs2 ++ test ++ http4s
 }
