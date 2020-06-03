@@ -41,7 +41,7 @@ object Main extends IOApp {
       )
     } yield xa
 
-  def app(xa: HikariTransactor[IO], config: Config): IO[Unit] =
+  def app(xa: HikariTransactor[IO], config: Config)(implicit ex: ExecutionContext): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
       fileEc                            = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(config.server.staticFileThreadSize))
@@ -51,7 +51,8 @@ object Main extends IOApp {
       userRepository                    = UserRepositoryAlg.impl[IO](xa)
       userBaseRepository                = UserBaseRepositoryAlg.impl[IO](xa)
       userService                       = UserServiceAlg.impl[IO](userRepository)
-      emailService                      = EmailServiceAlg.impl[IO]
+      emailService                      = EmailServiceAlg.impl[IO](config.email)
+      _ <- emailService.sendEmail
       userBaseService                   = UserBaseServiceAlg.impl[IO](userBaseRepository, userService)
       templateService                   = TemplateServiceAlg.impl[IO](templateRepository)
       eventTracker: EventTrackerAlg[IO] = EventTrackerAlg.impl[IO](config.kafka)
@@ -72,7 +73,7 @@ object Main extends IOApp {
     } yield exitCode
 
   def run(args: List[String]) = {
-
+    implicit val asd = global
     for {
       conf <- config
       _    <- database(conf.database).use(app(_, conf))

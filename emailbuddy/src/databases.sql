@@ -1,5 +1,5 @@
 create table campaign (id int primary key auto_increment, name varchar(100), status varchar(50));
-create table template (id int primary key auto_increment, name varchar(100), template varchar(2000));
+create table template (id int primary key auto_increment, name varchar(100), subject varchar(500), template varchar(2000));
 create table user_base (id int primary key auto_increment, name varchar(100));
 create table user (id int primary key auto_increment, name varchar(100), sex varchar(100), handedness varchar(100), email varchar(100), nationality varchar(100), age int, extraversion int, agreeableness int, conscientiousness int, neuroticism int, openness int);
 

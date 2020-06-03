@@ -1,27 +1,21 @@
 package unit
 
-import java.io.File
-
 import cats.effect.{Blocker, ContextShift, IO}
-import org.cueto.pfi.domain
-import cats.syntax.option._
 import cats.syntax.applicative._
 import cats.syntax.either._
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
 import io.circe.{Decoder, Encoder}
+import org.cueto.pfi.domain.Handedness.Ambidextrous
 import org.cueto.pfi.domain._
 import org.cueto.pfi.route.Api
 import org.cueto.pfi.service._
+import org.http4s.Method._
 import org.http4s._
 import org.http4s.circe._
+import org.http4s.headers.`Content-Type`
 import org.http4s.implicits._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import io.circe.generic.auto._
-import org.cueto.pfi.domain.Handedness.Ambidextrous
-import org.http4s
-import org.http4s.Method.POST
-import org.http4s.headers.`Content-Type`
 
 import scala.concurrent.ExecutionContext
 
@@ -39,7 +33,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
     }
 
     "return 500 if template couldn't be created" in new TestContext {
-      val req = post(NewTemplate("template", "foo"), uri"/")
+      val req = post(NewTemplate("template", "subject", "foo"), uri"/")
 
       runRequest(
         Api.templateRoutes(templateService(createTemplateResponse = IO.raiseError(new Exception)), logger),
@@ -48,7 +42,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
     }
 
     "return the id of a successfully created template" in new TestContext {
-      val newTemplate = NewTemplate("template", "<h1>template</h1>")
+      val newTemplate = NewTemplate("template", "subject", "<h1>template</h1>")
       val templateId  = 1
 
       val req =
@@ -69,7 +63,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
 
     "return templates if the service works" in new TestContext {
       val req       = get(uri"/")
-      val templates = List(Template(1, "asd", "fafa"))
+      val templates = List(Template(1, "asd", "subject", "fafa"))
       val service   = templateService(getTemplatesResponse = IO(templates))
 
       val response = runRequest(Api.templateRoutes(service, logger), req)
@@ -238,7 +232,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
     val blocker                       = Blocker.liftExecutionContext(ExecutionContext.global)
     implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
     "fail to track pixel when service fails" in new TestContext {
-      val req            = Request[IO](method = POST, uri = uri"/pixel/1/2/pixel.png")
+      val req            = Request[IO](method = GET, uri = uri"/pixel/1/2/pixel.png")
       val failingService = eventService(mailOpenedResponse = IO.raiseError(new Exception))
       an[Exception] should be thrownBy runRequest(Api.eventsApi(failingService, blocker), req)
     }

@@ -153,7 +153,7 @@ object Api { // def routes (recibe todos los services, y un logger, devuelve rou
     import dsl._
 
     HttpRoutes.of[F] {
-      case POST -> Root / "pixel" / IntVar(campaignId) / IntVar(userId) / "pixel.png" =>
+      case GET -> Root / "pixel" / IntVar(campaignId) / IntVar(userId) / "pixel.png" =>
         for {
           _         <- service.mailOpened(userId, campaignId)
           maybeFile <- StaticFile.fromResource("pixel.png", blocker).value
