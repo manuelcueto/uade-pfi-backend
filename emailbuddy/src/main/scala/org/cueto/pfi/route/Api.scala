@@ -1,6 +1,6 @@
 package org.cueto.pfi.route
 
-import cats.effect.{Blocker, ContextShift, Sync}
+import cats.effect.{Blocker, ContextShift, IO, Sync}
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
@@ -14,14 +14,47 @@ import org.cueto.pfi.service._
 import org.http4s.{HttpRoutes, MediaType, Request, StaticFile}
 import org.http4s.circe.CirceEntityCodec._
 import org.http4s.circe._
+import org.http4s.implicits._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.`Content-Type`
+import org.http4s.server.Router
+import org.http4s.server.middleware.{CORS, CORSConfig}
 import org.http4s.util.CaseInsensitiveString
+
+import scala.concurrent.duration._
 
 object Api { // def routes (recibe todos los services, y un logger, devuelve router con cors
 
   val baseNameHeader = CaseInsensitiveString("X-BASE-NAME")
   val csvContent     = `Content-Type`(MediaType.text.csv)
+
+  def routes[F[+_]: Sync: ContextShift](
+      campaignService: CampaignServiceAlg[F],
+      templateService: TemplateServiceAlg[F],
+      userService: UserServiceAlg[F],
+      userBaseService: UserBaseServiceAlg[F],
+      eventService: EventServiceAlg[F],
+      logger: Logger[F],
+      blocker: Blocker
+  ) = {
+    val methodConfig = CORSConfig(
+      anyOrigin = true,
+      anyMethod = false,
+      allowedMethods = Some(Set("GET", "POST", "DELETE")),
+      allowCredentials = true,
+      maxAge = 1.day.toSeconds
+    )
+    CORS(
+      Router(
+        "/api/campaigns" -> Api.campaignRoutes[F](campaignService),
+        "/api/templates" -> Api.templateRoutes[F](templateService, logger),
+        "/api/users"     -> Api.userRoutes[F](userService),
+        "/api/userBases" -> Api.userBaseRoutes[F](userBaseService),
+        "/api/events"    -> Api.eventsApi[F](eventService, blocker)
+      ),
+      methodConfig
+    ).orNotFound
+  }
 
   def campaignRoutes[F[+_]: Sync](campaignService: CampaignServiceAlg[F]): HttpRoutes[F] = {
     val dsl = new Http4sDsl[F] {}

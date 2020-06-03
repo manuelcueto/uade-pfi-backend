@@ -27,6 +27,10 @@ object Dependencies {
     "mysql" % "mysql-connector-java" % "8.0.20"
   )
 
+  lazy val pureConfig = Seq(
+    "com.github.pureconfig" %% "pureconfig" % "0.12.3"
+  )
+
   lazy val http4s = Seq(
     "org.http4s" %% "http4s-blaze-server" % Http4sVersion,
     "org.http4s" %% "http4s-blaze-client" % Http4sVersion,
@@ -49,10 +53,11 @@ object Dependencies {
   )
 
   lazy val email = Seq(
-     "com.github.daddykotex" %% "courier" % "2.0.0"
+    "com.github.daddykotex" %% "courier" % "2.0.0"
   )
 
-  lazy val domainDependencies = circe ++ cats ++ doobie ++ test
-  lazy val emailBuddyDependencies = circe ++ cats ++ doobie ++ logging ++ fs2 ++ test ++ http4s ++ email
-  lazy val eventTrackerDependencies = circe ++ cats ++ logging ++ fs2 ++ test ++ http4s
+  lazy val common = cats ++ test ++ pureConfig
+  lazy val domainDependencies = common ++ circe ++ doobie
+  lazy val emailBuddyDependencies = common ++ circe ++ doobie ++ logging ++ fs2 ++ http4s ++ email
+  lazy val eventTrackerDependencies = common ++ circe ++ logging ++ fs2 ++ http4s
 }

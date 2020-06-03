@@ -1,87 +1,81 @@
 package org.cueto.pfi
 
-import cats.effect.IO.ioConcurrentEffect
+import java.util.concurrent.Executors
+
+import cats.effect.IO._
+import cats.syntax.either._
 import cats.effect.{Blocker, ExitCode, IO, IOApp, Resource}
 import doobie.hikari.HikariTransactor
 import doobie.util.ExecutionContexts
 import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.cueto.pfi.config.{Config, DatabaseConfig}
+import org.cueto.pfi.domain.AppException
 import org.cueto.pfi.repository._
 import org.cueto.pfi.route.Api
 import org.cueto.pfi.service._
 import org.cueto.pfi.stream.EventTrackerAlg
-import org.http4s.implicits._
-import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.{Logger, _}
+import pureconfig.ConfigSource
+import pureconfig._
+import pureconfig.generic.auto._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.global
-import scala.concurrent.duration._
 
 object Main extends IOApp {
 
+  val config = IO.fromEither(ConfigSource.default.load[Config].leftMap(e => new AppException(e.prettyPrint())))
+
+  def database(conf: DatabaseConfig): Resource[IO, HikariTransactor[IO]] =
+    for {
+      ce <- ExecutionContexts.fixedThreadPool[IO](conf.threadPoolSize)
+      be <- Blocker[IO]
+      xa <- HikariTransactor.newHikariTransactor[IO](
+        "com.mysql.jdbc.Driver",
+        s"jdbc:mysql://${conf.host}/${conf.database}",
+        conf.username,
+        conf.password,
+        ce,
+        be
+      )
+    } yield xa
+
+  def app(xa: HikariTransactor[IO], config: Config): IO[Unit] =
+    for {
+      logger <- Slf4jLogger.create[IO]
+      fileEc                            = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(config.server.staticFileThreadSize))
+      blocker                           = Blocker.liftExecutionContext(fileEc)
+      campaignRepository                = CampaignsRepositoryAlg.impl[IO](xa)
+      templateRepository                = TemplateRepositoryAlg.impl[IO](xa)
+      userRepository                    = UserRepositoryAlg.impl[IO](xa)
+      userBaseRepository                = UserBaseRepositoryAlg.impl[IO](xa)
+      userService                       = UserServiceAlg.impl[IO](userRepository)
+      emailService                      = EmailServiceAlg.impl[IO]
+      userBaseService                   = UserBaseServiceAlg.impl[IO](userBaseRepository, userService)
+      templateService                   = TemplateServiceAlg.impl[IO](templateRepository)
+      eventTracker: EventTrackerAlg[IO] = EventTrackerAlg.impl[IO](config.kafka)
+      eventService                      = EventServiceAlg.impl(eventTracker)
+      campaignService =
+        CampaignServiceAlg.impl[IO](campaignRepository, userBaseService, templateService, emailService, eventService)
+
+      router = Api.routes(campaignService, templateService, userService, userBaseService, eventService, logger, blocker)
+
+      app = Logger.httpApp[IO](logHeaders = true, logBody = true)(router)
+      exitCode <-
+        BlazeServerBuilder[IO](global)
+          .bindHttp(config.server.bindPort, config.server.bindUrl)
+          .withHttpApp(app)
+          .serve
+          .compile
+          .drain
+    } yield exitCode
+
   def run(args: List[String]) = {
 
-    val foo: Resource[IO, IO[ExitCode]] = for {
-      ce     <- ExecutionContexts.fixedThreadPool[IO](32) // our connect EC
-      fileEc <- ExecutionContexts.fixedThreadPool[IO](2) // fileEC
-      be     <- Blocker[IO] // our blocking EC
-      xa <- HikariTransactor.newHikariTransactor[IO](
-        "com.mysql.jdbc.Driver",           // driver classname
-        "jdbc:mysql://127.0.0.1:3306/pfi", // connect URL
-        "root",                            // username
-        "password",                        // password
-        ce,                                // await connection here
-        be                                 // execute JDBC operations here
-      )
-    } yield {
-
-      for {
-        logger <- Slf4jLogger.create[IO]
-        methodConfig = CORSConfig(
-          anyOrigin = true,
-          anyMethod = false,
-          allowedMethods = Some(Set("GET", "POST", "DELETE")),
-          allowCredentials = true,
-          maxAge = 1.day.toSeconds
-        )
-
-        campaignRepository = CampaignsRepositoryAlg.impl[IO](xa)
-        templateRepository = TemplateRepositoryAlg.impl[IO](xa)
-        userRepository     = UserRepositoryAlg.impl[IO](xa)
-        userBaseRepository = UserBaseRepositoryAlg.impl[IO](xa)
-        userService        = UserServiceAlg.impl[IO](userRepository)
-        emailService       = EmailServiceAlg.impl[IO]
-        userBaseService    = UserBaseServiceAlg.impl[IO](userBaseRepository, userService)
-        templateService    = TemplateServiceAlg.impl[IO](templateRepository)
-        eventTracker: EventTrackerAlg[IO] = EventTrackerAlg.impl[IO]
-        eventService                           = EventServiceAlg.impl(eventTracker)
-        campaignService =
-          CampaignServiceAlg.impl[IO](campaignRepository, userBaseService, templateService, emailService, eventService)
-        blocker                           = Blocker.liftExecutionContext(fileEc)
-        router = CORS(
-          Router(
-            "/api/campaigns" -> Api.campaignRoutes[IO](campaignService),
-            "/api/templates" -> Api.templateRoutes[IO](templateService, logger),
-            "/api/users"     -> Api.userRoutes[IO](userService),
-            "/api/userBases" -> Api.userBaseRoutes[IO](userBaseService),
-            "/api/events"    -> Api.eventsApi(eventService, blocker)
-          ),
-          methodConfig
-        ).orNotFound
-
-        app = Logger.httpApp[IO](logHeaders = true, logBody = true)(router)
-        exitCode <-
-          BlazeServerBuilder[IO](global)
-            .bindHttp(9999, "localhost")
-            .withHttpApp(app)
-            .serve
-            .compile
-            .drain
-            .as(ExitCode.Success)
-      } yield exitCode
-
-    }
-
-    foo.use(identity)
+    for {
+      conf <- config
+      _    <- database(conf.database).use(app(_, conf))
+    } yield ExitCode.Success
   }
 }
