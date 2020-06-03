@@ -52,7 +52,7 @@ object Main extends IOApp {
       userBaseRepository                = UserBaseRepositoryAlg.impl[IO](xa)
       userService                       = UserServiceAlg.impl[IO](userRepository)
       emailService                      = EmailServiceAlg.impl[IO](config.email)
-      _ <- emailService.sendEmail
+//      _ <- emailService.sendEmail
       userBaseService                   = UserBaseServiceAlg.impl[IO](userBaseRepository, userService)
       templateService                   = TemplateServiceAlg.impl[IO](templateRepository)
       eventTracker: EventTrackerAlg[IO] = EventTrackerAlg.impl[IO](config.kafka)

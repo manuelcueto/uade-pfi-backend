@@ -32,7 +32,7 @@ object TemplateRepositoryAlg {
       override def createTemplate(template: NewTemplate): F[Option[TemplateId]] =
         for {
           id <-
-            sql"insert into template (name, template) values(${template.name}, ${template.text})".update
+            sql"insert into template (name, subject, template) values(${template.name}, ${template.subject}, ${template.text})".update
               .withGeneratedKeys[TemplateId]("id")
               .compile
               .toList
@@ -43,7 +43,7 @@ object TemplateRepositoryAlg {
       override def getTemplate(templateId: TemplateId): F[Template] =
         for {
           maybeTemplate <-
-            sql"select id, name, template from template where id = $templateId"
+            sql"select id, name, subject, template from template where id = $templateId"
               .query[Template]
               .option
               .transact(xa)
@@ -68,14 +68,14 @@ object TemplateRepositoryAlg {
       }
 
       override def getTemplates: F[List[Template]] =
-        sql"select * from template".query[Template].stream.compile.toList.transact(xa)
+        sql"select id, name, subject, template from template".query[Template].stream.compile.toList.transact(xa)
 
       override def delete(templateId: TemplateId): F[Unit] =
         sql"delete from template where id = $templateId".update.run.transact(xa).as(())
 
       override def getTemplates(templateIds: List[TemplateId]): F[List[Template]] =
         NonEmptyList.fromList(templateIds).fold(getTemplates) { ids =>
-          (fr"select * from template where" ++ Fragments
+          (fr"select id, name, subject, template from template where" ++ Fragments
             .in(fr"id", ids))
             .query[Template]
             .stream
