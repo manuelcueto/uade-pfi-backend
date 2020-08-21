@@ -6,3 +6,7 @@ create table user (id int primary key auto_increment, name varchar(100), sex var
 create table campaign_base (base_id int, campaign_id int, foreign key (base_id) references user_base (id) on update cascade, foreign key (campaign_id) references campaign (id) on update cascade, primary key (base_id, campaign_id));
 create table campaign_template (template_id int, campaign_id int, foreign key (template_id) references template (id) on update cascade, foreign key (campaign_id) references campaign (id) on update cascade, primary key (template_id, campaign_id));
 create table user_user_base (base_id int, user_id int, foreign key (base_id) references user_base (id) on update cascade, foreign key (user_id) references user (id) on update cascade, primary key (base_id, user_id));
+
+create table campaign_user (campaign_id int, user_id int, email_status varchar(50), foreign key (campaign_id) references campaign (id) on update cascade, foreign key (user_id) references user (id) on update cascade, primary key (campaign_id, user_id));
+
+create table pfi.campaign_stats (campaign_id INT primary key, total_users INT , mails_opened INT,sites_opened INT,codes_used  INT,avg_time_to_open BIGINT,avg_time_to_site BIGINT,avg_time_to_use_code BIGINT )

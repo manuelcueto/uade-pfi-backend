@@ -16,8 +16,8 @@ object Handedness {
   def handednessMap: String => Either[String, Handedness] =
     value =>
       value.toLowerCase match {
-        case "left"                  => LeftHanded.asRight
-        case "right"                 => RightHanded.asRight
+        case "left" | "lefthanded"   => LeftHanded.asRight
+        case "right" | "righthanded" => RightHanded.asRight
         case "ambidextrous" | "both" => Ambidextrous.asRight
         case other                   => s"invalid value: $other".asLeft
       }

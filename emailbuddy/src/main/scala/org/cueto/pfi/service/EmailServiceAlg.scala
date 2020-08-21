@@ -1,49 +1,56 @@
 package org.cueto.pfi.service
 
-import cats.effect.{ContextShift, IO, Sync}
+import cats.effect.{Async, ContextShift, Sync}
+import cats.syntax.applicativeError._
+import cats.syntax.flatMap._
 import courier._
+import io.chrisdavenport.log4cats.Logger
 import javax.mail.internet.InternetAddress
 import org.cueto.pfi.config.EmailConfig
-import org.cueto.pfi.domain.Template
+import org.cueto.pfi.domain.{CampaignId, Template, TemplateUserData}
 
 import scala.concurrent.ExecutionContext
 
 trait EmailServiceAlg[F[+_]] {
-  def sendEmails(userEmails: List[String], templates: List[Template]): F[Unit]
-  def sendEmail: F[Unit]
+  def sendEmails(userData: TemplateUserData, template: Template, campaignId: CampaignId): F[Unit]
+  def sendEmail(email: String, subject: String, body: String): F[Unit]
 }
 
 object EmailServiceAlg {
 
-  def impl[F[+_]: Sync](config: EmailConfig)(implicit ec: ExecutionContext, cs: ContextShift[IO]): EmailServiceAlg[F] =
+  def impl[F[+_]: Async](
+      config: EmailConfig,
+      logger: Logger[F]
+  )(implicit ec: ExecutionContext, cs: ContextShift[F]): EmailServiceAlg[F] =
     new EmailServiceAlg[F] {
       val mailer = Mailer(config.host, config.port).auth(true).as(config.sender, config.password).startTls(true)()
 
-      def sendEmail: F[Unit] = {
-        val mail =
-          Envelope
-            .from(new InternetAddress("uadepfi@gmail.com"))
-            .to(new InternetAddress("manuel.cueto.c@gmail.com"))
-            .subject("tu hermana")
-            .content(
-              Multipart().html(
-                """<html><body><img src="http://localhost:9999/api/events/pixel/1/1/pixel.png" alt="img" /> puto</body></html>"""
+      def sendEmail(email: String, subject: String, body: String): F[Unit] = {
+        Sync[F]
+          .catchNonFatal(
+            Envelope
+              .from(new InternetAddress("uadepfi@gmail.com"))
+              .to(new InternetAddress(email))
+              .subject(subject)
+              .content(
+                Multipart().html(
+                  s"""<html><body>$body</body></html>"""
+                )
               )
-            )
-
-        Sync[F].delay(mailer(mail))
+          )
+          .flatMap(email => Async.fromFuture(Async[F].delay(mailer(email))))
+      }.onError {
+        case e =>
+          logger.error(e)(s"error al enviar mail a $email ; subject: $subject - body: $body")
       }
 
-      override def sendEmails(userEmails: List[String], templates: List[Template]): F[Unit] = {
-        fs2
-          .Stream[F, Template](templates: _*)
-          .repeat
-          .zip(fs2.Stream(userEmails: _*))
-          .map {
-            case (templ, email) => println(s"$templ: $email")
-          }
-          .compile
-          .drain
+      override def sendEmails(
+          userData: TemplateUserData,
+          template: Template,
+          campaignId: CampaignId
+      ): F[Unit] = {
+        val (subject, emailBody) = template.specialized(userData.name, userData.id, campaignId)
+        sendEmail(userData.email, subject, emailBody)
       }
     }
 }

@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.syntax.applicative._
 import cats.syntax.either._
 import org.cueto.pfi.domain.Handedness.Ambidextrous
-import org.cueto.pfi.domain.{BaseId, DatabaseException, NewUser, Personality, Sex, UserCreationException, UserId}
+import org.cueto.pfi.domain.{BaseId, DatabaseException, NewUser, Personality, Sex, User, UserCreationException, UserId}
 import org.cueto.pfi.repository.UserRepositoryAlg
 import org.cueto.pfi.service.UserServiceAlg
 import org.scalatest.matchers.should.Matchers
@@ -34,6 +34,12 @@ class UserServiceSpec extends AnyWordSpec with Matchers {
     def service(createResponse: IO[UserId]): UserServiceAlg[IO] =
       UserServiceAlg.impl(new UserRepositoryAlg[IO] {
         override def createNewUser(newUser: NewUser, baseId: Option[BaseId]): IO[UserId] = createResponse
+
+        override def getUsers(userIds: List[UserId]): IO[List[User]] = IO.never
+
+        override def getUsers(baseId: BaseId): fs2.Stream[IO, User] = fs2.Stream.never[IO]
+
+        override def getUser(userId: UserId): IO[User] = IO.never
       })
   }
 }

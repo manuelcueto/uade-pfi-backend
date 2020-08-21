@@ -18,7 +18,8 @@ object Dependencies {
   )
 
   lazy val cats = Seq(
-    "org.typelevel" %% "cats-core" % CatsVersion
+    "org.typelevel" %% "cats-core" % CatsVersion,
+    "com.github.haifengl" %% "smile-scala" % "2.4.0"
   )
 
   lazy val doobie = Seq(

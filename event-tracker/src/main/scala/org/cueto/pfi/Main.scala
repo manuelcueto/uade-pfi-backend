@@ -2,46 +2,51 @@ package org.cueto.pfi
 
 import java.util.concurrent.Executors
 
-import cats.effect.concurrent.Ref
-import cats.effect.{ExitCode, IO, IOApp}
-import fs2.kafka._
-import io.circe.parser._
-import org.cueto.pfi.domain.Event.{CampaignEvent, UserEvent}
-import org.cueto.pfi.domain.EventType.SamplingStarted
-import org.cueto.pfi.domain.{CampaignId, Event, Topics}
+import cats.effect.{Blocker, ExitCode, IO, IOApp, Resource}
+import cats.syntax.either._
+import doobie.hikari.HikariTransactor
+import doobie.util.ExecutionContexts
+import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
+import org.cueto.pfi.config.{Config, DatabaseConfig}
+import org.cueto.pfi.domain.AppException
+import pureconfig.ConfigSource
+import pureconfig._
+import pureconfig.generic.auto._
 
-import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 
 object Main extends IOApp {
+
+  def database(conf: DatabaseConfig): Resource[IO, HikariTransactor[IO]] =
+    for {
+      ce <- ExecutionContexts.fixedThreadPool[IO](conf.threadPoolSize)
+      be <- Blocker[IO]
+      xa <- HikariTransactor.newHikariTransactor[IO](
+        "com.mysql.jdbc.Driver",
+        s"jdbc:mysql://${conf.host}/${conf.database}",
+        conf.username,
+        conf.password,
+        ce,
+        be
+      )
+    } yield xa
+
+  def app(xa: HikariTransactor[IO], config: Config): IO[Unit] =
+    for {
+      logger <- Slf4jLogger.create[IO]
+      apiEc        = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(4))
+      schedulerEc  = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(5))
+      service      = EmailBuddyServiceAlg.impl[IO](config.api, apiEc)
+      scheduler    = SchedulerAlg.impl[IO](config.kafka, schedulerEc)
+      statsService = StatsAlg.impl[IO](xa)
+      stream <- EventTracker.configure[IO](config.kafka, service, scheduler, statsService).stream
+      _      <- stream.compile.drain
+    } yield ()
+
   override def run(args: List[String]): IO[ExitCode] = {
-
-
-    implicit val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(5))
-    val service = EmailBuddyServiceAlg.impl[IO]
-    EventTracker.configure[IO](service).stream.compile.drain.as(ExitCode.Success)
-
-    //    val asdd = Ref[IO].of(1)
-    //    val foo = fs2.Stream[IO, Int](1 to 10: _*).scan(asdd) {
-    //      case (acc, i) =>
-    //        for {
-    //          ref <- acc
-    //          sideEffect <- ref.modify(currState => (currState + i, s"foo${currState + i}"))
-    //          _ = println(sideEffect)
-    //        } yield ref
-    //    }
-
-
-    // 2do leo events topic y actualizo state, cuando una campaign cambia de estado, hago post en emailbuddy
-    //    val consumerSettings = ConsumerSettings[IO, Option[String], String]
-    //      .withAutoOffsetReset(AutoOffsetReset.Earliest)
-    //      .withBootstrapServers("localhost:9092")
-    //      .withGroupId("event-tracker-events")
-
-    //    val stream = consumerStream[IO].using(consumerSettings).evalTap(_.subscribeTo("test")).flatMap(_.stream)
-
-    //    stream.map { rec =>
-    //      println(rec.record.value)
-    //    }.compile.drain.as(ExitCode.Success)
+    for {
+      config <- IO.fromEither(ConfigSource.default.load[Config].leftMap(e => new AppException(e.prettyPrint())))
+      _      <- database(config.database).use(app(_, config))
+    } yield ExitCode.Success
   }
 }

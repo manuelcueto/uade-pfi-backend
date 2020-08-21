@@ -22,15 +22,22 @@ object Event {
     val eventId: String = s"$campaignId-$eventType"
   }
 
-  implicit val userEventCodec: Codec[UserEvent]         = deriveCodec[UserEvent]
-  implicit val campaignEventCodec: Codec[CampaignEvent] = deriveCodec[CampaignEvent]
+  final case class TimeLimitReached(campaignId: CampaignId) extends Event {
+    val eventId: String = s"time-limit-reached-$campaignId"
+  }
+
+  implicit val userEventCodec: Codec[UserEvent]                    = deriveCodec
+  implicit val campaignEventCodec: Codec[CampaignEvent]            = deriveCodec
+  implicit val timeLimitReachedEventCodec: Codec[TimeLimitReached] = deriveCodec
 
   implicit val eventDecoder: Decoder[Event] =
-    List(Decoder[UserEvent].widen[Event], Decoder[CampaignEvent].widen[Event]).reduceLeft(_ or _)
+    List(Decoder[UserEvent].widen[Event], Decoder[CampaignEvent].widen[Event], Decoder[TimeLimitReached].widen[Event])
+      .reduceLeft(_ or _)
 
   implicit val eventEncoder: Encoder[Event] = Encoder.instance[Event] {
-    case ev: UserEvent     => ev.asJson
-    case ev: CampaignEvent => ev.asJson
+    case ev: UserEvent        => ev.asJson
+    case ev: CampaignEvent    => ev.asJson
+    case ev: TimeLimitReached => ev.asJson
   }
 
 }
@@ -39,7 +46,7 @@ sealed trait EventType extends Product with Serializable
 
 object EventType {
 
-  final case class SamplingStarted(target: Int) extends EventType {
+  final case class SamplingStarted(target: Int, limit: Long) extends EventType {
     override def toString: String = "sampling-started"
   }
 
@@ -47,10 +54,33 @@ object EventType {
 
   implicit val samplingStartedDecoder: Decoder[SamplingStarted] = deriveDecoder[SamplingStarted]
 
-  implicit val encoder: Encoder[EventType] = Encoder.instance[EventType] {
-    case ev @ SamplingStarted(_) => ev.asJson
+  final case class CampaignRunning(target: Int) extends EventType {
+    override def toString: String = "campaign-running"
   }
 
-  implicit val decoder: Decoder[EventType] = samplingStartedDecoder.widen[EventType]
-  implicit val codec: Codec[EventType]     = Codec.from(decoder, encoder)
+  implicit val campaignRunningEncoder: Encoder[CampaignRunning] = deriveEncoder[CampaignRunning]
+
+  implicit val campaignRunningDecoder: Decoder[CampaignRunning] = deriveDecoder[CampaignRunning]
+
+  final case class CampaignDefined(totalUsers: Int) extends EventType {
+    override def toString: String = "campaign-defined"
+  }
+
+  implicit val campaignDefinedEncoder: Encoder[CampaignDefined] = deriveEncoder[CampaignDefined]
+
+  implicit val campaignDefinedDecoder: Decoder[CampaignDefined] = deriveDecoder[CampaignDefined]
+
+  implicit val encoder: Encoder[EventType] = Encoder.instance[EventType] {
+    case ev @ SamplingStarted(_, _) => ev.asJson
+    case ev @ CampaignRunning(_)    => ev.asJson
+    case ev @ CampaignDefined(_)    => ev.asJson
+  }
+
+  implicit val decoder: Decoder[EventType] =
+    List(
+      samplingStartedDecoder.widen[EventType],
+      campaignRunningDecoder.widen[EventType],
+      campaignDefinedDecoder.widen[EventType]
+    ).reduceLeft(_ or _)
+  implicit val codec: Codec[EventType] = Codec.from(decoder, encoder)
 }

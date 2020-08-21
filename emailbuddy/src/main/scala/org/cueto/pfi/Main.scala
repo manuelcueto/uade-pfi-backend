@@ -44,23 +44,44 @@ object Main extends IOApp {
   def app(xa: HikariTransactor[IO], config: Config)(implicit ex: ExecutionContext): IO[Unit] =
     for {
       logger <- Slf4jLogger.create[IO]
-      fileEc                            = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(config.server.staticFileThreadSize))
-      blocker                           = Blocker.liftExecutionContext(fileEc)
-      campaignRepository                = CampaignsRepositoryAlg.impl[IO](xa)
-      templateRepository                = TemplateRepositoryAlg.impl[IO](xa)
-      userRepository                    = UserRepositoryAlg.impl[IO](xa)
-      userBaseRepository                = UserBaseRepositoryAlg.impl[IO](xa)
-      userService                       = UserServiceAlg.impl[IO](userRepository)
-      emailService                      = EmailServiceAlg.impl[IO](config.email)
-//      _ <- emailService.sendEmail
-      userBaseService                   = UserBaseServiceAlg.impl[IO](userBaseRepository, userService)
-      templateService                   = TemplateServiceAlg.impl[IO](templateRepository)
-      eventTracker: EventTrackerAlg[IO] = EventTrackerAlg.impl[IO](config.kafka)
-      eventService                      = EventServiceAlg.impl(eventTracker)
-      campaignService =
-        CampaignServiceAlg.impl[IO](campaignRepository, userBaseService, templateService, emailService, eventService)
+      fileEc                    = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(config.server.staticFileThreadSize))
+      blocker                   = Blocker.liftExecutionContext(fileEc)
+      campaignRepository        = CampaignsRepositoryAlg.impl[IO](xa)
+      templateRepository        = TemplateRepositoryAlg.impl[IO](xa)
+      userRepository            = UserRepositoryAlg.impl[IO](xa)
+      userBaseRepository        = UserBaseRepositoryAlg.impl[IO](xa)
+      campaignUserRepository    = CampaignUserRepositoryAlg.impl(xa)
+      campaignStatsRepository   = CampaignStatsRepositoryAlg.impl(xa)
+      userService               = UserServiceAlg.impl[IO](userRepository)
+      emailService              = EmailServiceAlg.impl[IO](config.email, logger)
+      userBaseService           = UserBaseServiceAlg.impl[IO](userBaseRepository, userService)
+      templateService           = TemplateServiceAlg.impl[IO](templateRepository)
+      eventTracker              = EventTrackerAlg.impl[IO](config.kafka)
+      campaignUserService       = CampaignUserServiceAlg.impl(campaignUserRepository, userService)
+      eventService              = EventServiceAlg.impl(eventTracker, campaignUserService)
+      logisticRegressionService = RegressionServiceAlg.impl
+      campaignStatsService      = CampaignStatsServiceAlg.impl(campaignStatsRepository)
+      campaignService = CampaignServiceAlg.impl[IO](
+        campaignRepository,
+        userBaseService,
+        templateService,
+        emailService,
+        eventService,
+        campaignUserService,
+        userService,
+        logisticRegressionService
+      )
 
-      router = Api.routes(campaignService, templateService, userService, userBaseService, eventService, logger, blocker)
+      router = Api.routes(
+        campaignService,
+        templateService,
+        userService,
+        userBaseService,
+        eventService,
+        campaignStatsService,
+        logger,
+        blocker
+      )
 
       app = Logger.httpApp[IO](logHeaders = true, logBody = true)(router)
       exitCode <-

@@ -102,7 +102,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
       val req              = get(uri"/2")
       val expectedResponse = Campaign(campaignId, "name", CampaignStatus.Started)
       val response =
-        runRequest(Api.campaignRoutes(campaignService(findCampaignResponse = expectedResponse.asRight)), req)
+        runRequest(Api.campaignRoutes(campaignService(findCampaignResponse = IO(expectedResponse))), req)
       response.status shouldBe Status.Ok
       bodyAs[Campaign](response) shouldBe expectedResponse
     }
@@ -113,7 +113,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
       val expectedResponse = Campaign(campaignId, "name", CampaignStatus.Started)
       val response =
         runRequest(
-          Api.campaignRoutes(campaignService(findCampaignResponse = CampaignNotFound(campaignId).asLeft)),
+          Api.campaignRoutes(campaignService(findCampaignResponse = IO.raiseError(CampaignNotFound(campaignId)))),
           req
         )
       response.status shouldBe Status.NotFound
@@ -131,7 +131,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
       val req         = post(newCampaign, uri"/")
 
       val response =
-        runRequest(Api.campaignRoutes(campaignService(createCampaignResponse = new AppException("poo").asLeft)), req)
+        runRequest(Api.campaignRoutes(campaignService(createCampaignResponse = IO.raiseError(new AppException("poo")))), req)
       response.status shouldBe Status.InternalServerError
     }
 
@@ -141,7 +141,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
       val req         = post(newCampaign, uri"/")
 
       val response =
-        runRequest(Api.campaignRoutes(campaignService(createCampaignResponse = campaignId.asRight)), req)
+        runRequest(Api.campaignRoutes(campaignService(createCampaignResponse = IO(campaignId))), req)
       response.status shouldBe Status.Ok
       bodyAs[CampaignId](response) shouldBe campaignId
     }
@@ -299,23 +299,25 @@ class ApiSpec extends AnyWordSpec with Matchers {
 
     def campaignService(
         getAllResponse: List[Campaign] = List.empty,
-        findCampaignResponse: Either[CampaignNotFound, Campaign] = Left(CampaignNotFound(1)),
-        createCampaignResponse: Either[AppException, CampaignId] = Left(new AppException("foo"))
+        findCampaignResponse: IO[Campaign] = IO.never,
+        createCampaignResponse: IO[CampaignId] = IO.never
     ): CampaignServiceAlg[IO] =
       new CampaignServiceAlg[IO] {
 
-        override def findCampaign(campaignId: CampaignId): IO[Either[CampaignNotFound, Campaign]] =
-          findCampaignResponse.pure[IO]
+        override def findCampaign(campaignId: CampaignId): IO[Campaign] =
+          findCampaignResponse
 
-        override def createCampaign(newCampaign: NewCampaign): IO[Either[AppException, CampaignId]] =
-          createCampaignResponse.pure[IO]
+        override def createCampaign(newCampaign: NewCampaign): IO[CampaignId] =
+          createCampaignResponse
 
         override def getAll: IO[List[Campaign]] = getAllResponse.pure[IO]
 
-        override def startCampaign(campaignId: CampaignId): IO[Unit] = IO.never
-
-        override def startSampling(campaignId: CampaignId, samplingRatio: TemplateId): IO[Unit] =
+        override def startSampling(campaignId: CampaignId, samplingParameters: SamplingParameters): IO[Unit] =
           IO.never
+
+        override def updateCampaignStatus(campaignId: CampaignId, status: CampaignStatus): IO[Unit] = IO.never
+
+        override def runCampaign(campaignId: CampaignId): IO[Unit] = IO.never
       }
 
     def templateService(
@@ -340,12 +342,18 @@ class ApiSpec extends AnyWordSpec with Matchers {
 
         override def deleteTemplate(templateId: TemplateId): IO[Unit] = deleteTemplateResponse
 
-        override def getTemplates(templateIds: List[TemplateId]): IO[List[Template]] = ???
+        override def getTemplates(templateIds: List[TemplateId]): IO[List[Template]] = IO.never
       }
 
     def userService(createResponse: IO[UserId]): UserServiceAlg[IO] =
       new UserServiceAlg[IO] {
         override def createUser(newUser: NewUser, baseId: Option[BaseId]): IO[UserId] = createResponse
+
+        override def getUsers(userIds: List[UserId]): IO[List[User]] = IO.never
+
+        override def getUsers(baseId: BaseId): fs2.Stream[IO, User] = fs2.Stream.never[IO]
+
+        override def getUser(userId: UserId): IO[User] = IO.never
       }
 
     def userBaseService(
@@ -363,7 +371,7 @@ class ApiSpec extends AnyWordSpec with Matchers {
         override def updateBase(id: BaseId, name: String, users: List[String]): IO[Unit] =
           updateResponse
 
-        override def getUserSample(id: BaseId, sample: Int): IO[List[String]] = IO.never
+        override def getUserSample(id: BaseId, sample: Int): IO[List[TemplateUserData]] = IO.never
 
         override def getBases: IO[List[UserBaseSize]] = IO.never
       }
@@ -381,7 +389,13 @@ class ApiSpec extends AnyWordSpec with Matchers {
 
         override def mailOpened(userId: UserId, campaignId: CampaignId): IO[Unit] = mailOpenedResponse
 
-        override def samplingStarted(campaignId: CampaignId, target: UserId): IO[Unit] = ???
+        override def samplingStarted(campaignId: CampaignId, target: UserId, limit: Long): IO[Unit] = IO.never
+
+        override def runCampaign(campaignId: CampaignId, target: UserId): IO[Unit] = IO.never
+
+        override def campaignDefined(campaignId: CampaignId, totalUsers: UserId): IO[Unit] = IO.never
+
+        override def mailSent(userId: UserId, campaignId: CampaignId): IO[Unit] = IO.never
       }
   }
 

@@ -6,7 +6,7 @@ import cats.instances.list._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.traverse._
-import org.cueto.pfi.domain.{BaseId, NewUser, UserBase, UserBaseSize}
+import org.cueto.pfi.domain.{BaseId, NewUser, TemplateUserData, User, UserBase, UserBaseSize}
 import org.cueto.pfi.repository.UserBaseRepositoryAlg
 
 trait UserBaseServiceAlg[F[+_]] {
@@ -16,7 +16,7 @@ trait UserBaseServiceAlg[F[+_]] {
   def createBase(name: String, users: List[String]): F[BaseId]
   def updateBase(id: BaseId, name: String, users: List[String]): F[Unit]
   def getBases: F[List[UserBaseSize]]
-  def getUserSample(id: BaseId, sample: Int): F[List[String]]
+  def getUserSample(id: BaseId, sample: Int): F[List[TemplateUserData]]
 }
 
 object UserBaseServiceAlg {
@@ -42,7 +42,7 @@ object UserBaseServiceAlg {
 
       override def updateBase(id: BaseId, name: String, users: List[String]): F[Unit] = ???
 
-      override def getUserSample(id: BaseId, sample: Int): F[List[String]] = baseRepository.getSample(id, sample)
+      override def getUserSample(id: BaseId, sample: Int): F[List[TemplateUserData]] = baseRepository.getSample(id, sample)
 
       override def getBases: F[List[UserBaseSize]] = baseRepository.getBases
     }

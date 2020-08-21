@@ -7,7 +7,7 @@ import io.circe.generic.semiauto._
 import scala.util.Try
 
 final case class User(
-    id: String,
+    id: UserId,
     name: String,
     sex: Sex,
     handedness: Handedness,
@@ -26,6 +26,8 @@ final case class NewUser(
     age: Int,
     personality: Personality
 )
+
+final case class TemplateUserData(id: UserId, name: String, email: String)
 
 object User {
   implicit val codec: Codec[User] = deriveCodec

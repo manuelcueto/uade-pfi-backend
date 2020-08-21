@@ -5,7 +5,7 @@ import cats.scalatest.EitherMatchers
 import cats.syntax.applicative._
 import cats.syntax.either._
 import org.cueto.pfi.domain
-import org.cueto.pfi.domain.{AppException, BaseId, NewUser, UserBase, UserBaseSize, UserId}
+import org.cueto.pfi.domain.{AppException, BaseId, NewUser, TemplateUserData, User, UserBase, UserBaseSize, UserId}
 import org.cueto.pfi.repository.UserBaseRepositoryAlg
 import org.cueto.pfi.service.{UserBaseServiceAlg, UserServiceAlg}
 import org.scalatest.matchers.should.Matchers
@@ -64,10 +64,16 @@ class UserBaseServiceSpec extends AnyWordSpec with Matchers with EitherMatchers 
 
           override def getBases: IO[List[UserBaseSize]] = getBasesResponse
 
-          override def getSample(id: BaseId, sample: BaseId): IO[List[String]] = IO.never
+          override def getSample(id: BaseId, sample: BaseId): IO[List[TemplateUserData]] = IO.never
         },
         new UserServiceAlg[IO] {
           override def createUser(newUser: NewUser, baseId: Option[BaseId]): IO[UserId] = userServiceResponse
+
+          override def getUsers(userIds: List[UserId]): IO[List[User]] = IO.never
+
+          override def getUsers(baseId: BaseId): fs2.Stream[IO, User] = fs2.Stream.never[IO]
+
+          override def getUser(userId: UserId): IO[User] = IO.never
         }
       )
   }

@@ -3,13 +3,15 @@ package org.cueto.pfi.repository
 import cats.effect.Sync
 import cats.syntax.functor._
 import cats.instances.list._
+import cats.instances.option._
 import cats.syntax.flatMap._
+import cats.syntax.traverse._
 import cats.syntax.either._
 import cats.syntax.applicative._
 import doobie.util.transactor.Transactor
 import doobie.implicits._
 import doobie.util.update.Update
-import org.cueto.pfi.domain.{AppException, BaseId, User, UserBase, UserBaseCreationException, UserBaseNotFound, UserBaseSize, UserId}
+import org.cueto.pfi.domain.{AppException, BaseId, TemplateUserData, User, UserBase, UserBaseCreationException, UserBaseNotFound, UserBaseSize, UserId}
 
 trait UserBaseRepositoryAlg[F[+_]] {
 
@@ -23,12 +25,12 @@ trait UserBaseRepositoryAlg[F[+_]] {
 
   def updateBase(id: BaseId, users: List[UserId]): F[Unit]
 
-  def getSample(id: BaseId, sample: Int): F[List[String]]
+  def getSample(id: BaseId, sample: Int): F[List[TemplateUserData]]
 }
 
 object UserBaseRepositoryAlg {
 
-  def impl[F[+_] : Sync](xa: Transactor[F]) =
+  def impl[F[+_]: Sync](xa: Transactor[F]) =
     new UserBaseRepositoryAlg[F] {
 
       override def getUserBase(baseId: BaseId): F[UserBase] =
@@ -72,16 +74,19 @@ object UserBaseRepositoryAlg {
           .transact(xa)
           .map(_.map { case (id, size, name) => UserBaseSize(id, name, size) })
 
-      override def getSample(id: BaseId, sample: Int): F[List[String]] =
+      override def getSample(id: BaseId, sample: Int): F[List[TemplateUserData]] =
         (for {
-          sampleSize <- sql"select count(*) from user_user_base where base_id = $id".query[Int].option
-          sampleIds <-
-            sql"select u.email from user u  inner join user_user_base b on b.user_id = u.id where b.base_id = $id order by Rand() limit $sampleSize"
-              .query[String]
+          totalSize <- sql"select count(*) from user_user_base where base_id = $id".query[Int].option
+          sampleSize = totalSize.map(size => Math.ceil(size * (sample / 100D)))
+          sampleIds <- sampleSize.traverse { size =>
+            sql"select u.id, u.name, u.email from user u  inner join user_user_base b on b.user_id = u.id where b.base_id = $id order by Rand() limit ${size.toInt}"
+              .query[TemplateUserData]
               .stream
               .compile
               .toList
-        } yield sampleIds).transact(xa)
+          }
+
+        } yield sampleIds.sequence.flatten).transact(xa)
 
     }
 }

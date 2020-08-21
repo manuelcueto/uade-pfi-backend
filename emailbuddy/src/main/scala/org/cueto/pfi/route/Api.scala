@@ -34,6 +34,7 @@ object Api { // def routes (recibe todos los services, y un logger, devuelve rou
       userService: UserServiceAlg[F],
       userBaseService: UserBaseServiceAlg[F],
       eventService: EventServiceAlg[F],
+      campaignStatsService: CampaignStatsServiceAlg[F],
       logger: Logger[F],
       blocker: Blocker
   ) = {
@@ -50,7 +51,8 @@ object Api { // def routes (recibe todos los services, y un logger, devuelve rou
         "/api/templates" -> Api.templateRoutes[F](templateService, logger),
         "/api/users"     -> Api.userRoutes[F](userService),
         "/api/userBases" -> Api.userBaseRoutes[F](userBaseService),
-        "/api/events"    -> Api.eventsApi[F](eventService, blocker)
+        "/api/events"    -> Api.eventsApi[F](eventService, blocker),
+        "/api/stats" -> Api.statsApi[F](campaignStatsService)
       ),
       methodConfig
     ).orNotFound
@@ -64,22 +66,25 @@ object Api { // def routes (recibe todos los services, y un logger, devuelve rou
         case GET -> Root / IntVar(campaignId) =>
           campaignService
             .findCampaign(campaignId)
+            .attempt
             .flatMap(_.fold(_ => NotFound(), campaign => Ok(campaign.asJson)))
         case GET -> Root =>
           Ok(campaignService.getAll)
         case req @ POST -> Root =>
           for {
             newCampaign <- req.as[NewCampaign]
-            campaignId  <- campaignService.createCampaign(newCampaign)
+            campaignId  <- campaignService.createCampaign(newCampaign).attempt
             response    <- campaignId.fold(_ => InternalServerError(), id => Ok(id))
           } yield response
-        case POST -> Root / IntVar(campaignId) / "startSampling" / IntVar(percentage) =>
-          campaignService.startSampling(campaignId, percentage) >> Ok()
-        case POST -> Root / campaignId / "startFullCampaign" => // TODO
-          Ok()
+        case req @ POST -> Root / IntVar(campaignId) / "startSampling" =>
+          for {
+            samplingParameters <- req.as[SamplingParameters]
+            response           <- campaignService.startSampling(campaignId, samplingParameters) >> Ok()
+          } yield response
+        case POST -> Root / IntVar(campaignId) / "startFullCampaign" => //
+          campaignService.runCampaign(campaignId) >> Ok()
         case POST -> Root / IntVar(campaignId) / "finishSampling" =>
-          //update campaign status to samplingDone
-          Ok()
+          campaignService.updateCampaignStatus(campaignId, CampaignStatus.Sampled) >> Ok()
       }
 
   }
@@ -163,6 +168,16 @@ object Api { // def routes (recibe todos los services, y un logger, devuelve rou
         service.siteOpened(userId, campaignId) >> NoContent()
       case POST -> Root / "codeUsed" / IntVar(campaignId) / IntVar(userId) =>
         service.referralLinkOpened(userId, campaignId) >> NoContent()
+    }
+  }
+
+  def statsApi[F[+_]: Sync](service: CampaignStatsServiceAlg[F]): HttpRoutes[F] = {
+    val dsl = new Http4sDsl[F] {}
+
+    import dsl._
+    HttpRoutes.of[F] {
+      case GET -> Root / IntVar(campaignId) =>
+        service.getStats(campaignId).flatMap(Ok(_))
     }
   }
 

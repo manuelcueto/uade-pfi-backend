@@ -13,11 +13,12 @@ import doobie.util.update.Update
 import org.cueto.pfi.domain.{CampaignStatus, _}
 
 trait CampaignsRepositoryAlg[F[_]] {
-  def get(id: CampaignId): F[Either[CampaignNotFound, Campaign]]
+  def get(id: CampaignId): F[Campaign]
   def getAll: F[List[Campaign]]
   def create(newCampaign: NewCampaign): F[Option[CampaignId]]
   def campaignBaseId(campaignId: CampaignId): F[BaseId]
   def campaignTemplates(campaignId: CampaignId): F[List[TemplateId]]
+  def updateStatus(campaignId: CampaignId, status: CampaignStatus): F[Unit]
 }
 
 object CampaignsRepositoryAlg {
@@ -25,12 +26,12 @@ object CampaignsRepositoryAlg {
   def impl[F[_]: Sync](xa: Transactor[F]) =
     new CampaignsRepositoryAlg[F] {
 
-      override def get(id: CampaignId): F[Either[CampaignNotFound, Campaign]] =
+      override def get(id: CampaignId): F[Campaign] =
         sql"select id, name, status from campaign where id = $id"
           .query[Campaign]
           .option
           .transact(xa)
-          .map(campaign => campaign.toRight(CampaignNotFound(id)))
+          .flatMap(Sync[F].fromOption(_, CampaignNotFound(id)))
 
       override def getAll: F[List[Campaign]] =
         sql"select id, name, status from campaign"
@@ -74,5 +75,9 @@ object CampaignsRepositoryAlg {
           .compile
           .toList
           .transact(xa)
+
+      override def updateStatus(campaignId: CampaignId, status: CampaignStatus): F[Unit] =
+        sql"update campaign set status = $status where id = $campaignId".update.run.transact(xa).as(())
+
     }
 }

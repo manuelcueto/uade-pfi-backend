@@ -8,6 +8,7 @@ import doobie.util.{Get, Put}
 sealed trait State extends Product with Serializable
 
 object State {
+  case object MailSent   extends State
   case object MailOpened extends State
   case object SiteOpened extends State
   case object CodeUsed   extends State
@@ -18,6 +19,7 @@ object State {
         case "mailopened" => MailOpened.asRight
         case "codeused"   => CodeUsed.asRight
         case "siteopened" => SiteOpened.asRight
+        case "mailsent"   => MailSent.asRight
         case other        => s"invalid value: $other".asLeft
       }
 
