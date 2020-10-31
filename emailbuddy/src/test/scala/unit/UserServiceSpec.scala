@@ -15,7 +15,7 @@ class UserServiceSpec extends AnyWordSpec with Matchers {
   "createUser" should {
 
     "return an exception when repo fails" in new TestContext {
-      val user             = NewUser("name", Sex.Male, Ambidextrous, "email", "jew", 24, Personality(1, 2, 3, 4, 5))
+      val user             = NewUser("name", Sex.Male, Ambidextrous, "email", "argentino", 24, Personality(1, 2, 3, 4, 5))
       val expectedResponse = IO.raiseError(UserCreationException(user))
 
       an[UserCreationException] should be thrownBy service(expectedResponse).createUser(user, None).unsafeRunSync
@@ -23,7 +23,7 @@ class UserServiceSpec extends AnyWordSpec with Matchers {
 
     "return unit when user created successfully" in new TestContext {
       val userId = 1
-      val user   = NewUser("name", Sex.Male, Ambidextrous, "email", "jew", 24, Personality(1, 2, 3, 4, 5))
+      val user   = NewUser("name", Sex.Male, Ambidextrous, "email", "argentino", 24, Personality(1, 2, 3, 4, 5))
 
       service(IO(userId)).createUser(user, None).unsafeRunSync shouldBe userId
     }

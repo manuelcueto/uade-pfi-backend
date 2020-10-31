@@ -156,14 +156,14 @@ class ApiSpec extends AnyWordSpec with Matchers {
     }
 
     "return 500 if user couldn't be created" in new TestContext {
-      val newUser  = NewUser("name", Sex.Male, Ambidextrous, "email", "jew", 24, Personality(1, 2, 3, 4, 5))
+      val newUser  = NewUser("name", Sex.Male, Ambidextrous, "email", "capo", 24, Personality(1, 2, 3, 4, 5))
       val req      = post(newUser, uri"/1")
       val response = runRequest(Api.userRoutes(userService(IO.raiseError(UserCreationException(newUser)))), req)
       response.status shouldBe Status.InternalServerError
     }
 
     "return noContent when user created successfully" in new TestContext {
-      val newUser  = NewUser("name", Sex.Male, Ambidextrous, "email", "jew", 24, Personality(1, 2, 3, 4, 5))
+      val newUser  = NewUser("name", Sex.Male, Ambidextrous, "email", "capo", 24, Personality(1, 2, 3, 4, 5))
       val req      = post(newUser, uri"/1")
       val response = runRequest(Api.userRoutes(userService(IO(1))), req)
       response.status shouldBe Status.NoContent

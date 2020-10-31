@@ -8,6 +8,7 @@ final case class Template(id: TemplateId, name: String, subject: String, text: S
   def specialized(name: String, userId: UserId, campaignId: CampaignId): (String, String) = {
     def replace: String => String =
       _.replace("{{nombre}}", name)
+      .replace("{{usuario}}", name)
         .replace("{{userId}}", userId.toString)
         .replace("{{campaignId}}", campaignId.toString)
 

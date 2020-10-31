@@ -13,12 +13,12 @@ class TemplateSpec extends AnyWordSpec with Matchers {
       val campaignId = 2
       val expectedSubject = s"hola $userName"
       val expectedResponse =
-        s"""<img src="http://localhost:9999/api/events/pixel/$campaignId/$userId/pixel.png" alt="img" /> $userName sos un puto"""
+        s"""<img src="http://localhost:9999/api/events/pixel/$campaignId/$userId/pixel.png" alt="img" /> $userName prueba"""
       val template = Template(
         1,
         "template",
         "hola {{nombre}}",
-        """<img src="http://localhost:9999/api/events/pixel/{{campaignId}}/{{userId}}/pixel.png" alt="img" /> {{nombre}} sos un puto"""
+        """<img src="http://localhost:9999/api/events/pixel/{{campaignId}}/{{userId}}/pixel.png" alt="img" /> {{nombre}} prueba"""
       )
 
       template.specialized(userName, userId, campaignId) shouldBe (expectedSubject, expectedResponse)

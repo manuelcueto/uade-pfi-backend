@@ -27,7 +27,7 @@ object CampaignServiceAlg {
   val addImagePixel: Template => Template = template =>
     template
       .copy(text =
-        s"""<img src="http://localhost:9999/api/events/pixel/{{campaignId}}/{{userId}}/pixel.png" alt="img" /> ${template.text}""" //viene por config (no localhost)
+        s""" ${template.text} <a href="http://localhost:3000/landingSite/{{campaignId}}/{{userId}}"> Ingresa aca para ver tu Descuento </a>""" //viene por config (no localhost)
       )
 
   def impl[F[+_]: Sync: Parallel](
